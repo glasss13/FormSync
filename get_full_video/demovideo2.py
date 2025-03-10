@@ -135,13 +135,8 @@ def get_joint_display_name(joint_name):
     return joint_name
 
 # Load frames from files
-all_frames = np.load("frames_all.npy")
-print("Original shape:", all_frames.shape)
-
-# Remove frames 16-20
-indices_to_keep = list(range(16)) + list(range(21, len(all_frames)))
-frames = all_frames[indices_to_keep]
-print("New shape after removing frames 16-20:", frames.shape)
+frames = np.load("frames_all.npy")
+print("Loaded frames shape:", frames.shape)
 
 # Swap Y and Z axes to make the skeleton stand upright
 frames[:, :, [1, 2]] = frames[:, :, [2, 1]]
@@ -174,13 +169,9 @@ view_elev = 90
 view_azim = 270
 initial_elev = view_elev  # Define initial elevation before using it
 
-
 # Define the update function for the animation
 def update(frame_idx):
     global view_elev, view_azim
-    
-    # Get the actual frame number (for display)
-    actual_frame = indices_to_keep[frame_idx] if frame_idx < len(indices_to_keep) else "N/A"
     
     # Store current view angle if it exists
     if hasattr(ax, 'elev') and ax.elev is not None:
@@ -242,8 +233,8 @@ def update(frame_idx):
         # Draw arc
         draw_angle_arc(ax, P1, P2, P3, color='red', radius=10)
     
-    # Update frame counter (show both animation frame and original frame number)
-    frame_counter.set_text(f"Frame: {frame_idx} (Original: {actual_frame})")
+    # Update frame counter
+    frame_counter.set_text(f"Frame: {frame_idx}")
     
     # Update angle values text - group by joint type
     angle_text_str = "Angle Values:\n\n"

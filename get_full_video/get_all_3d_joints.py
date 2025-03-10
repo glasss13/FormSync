@@ -344,13 +344,17 @@ if __name__ == "__main__":
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose()
 
-    # Process all frames to get 3D joints
+    # Process all frames to get 3D joints - don't limit to 28 frames
     print("Processing frames...")
     joints_all_frames = []
-    for i in range(min(28, len(actual_frames), len(grey_frames))):
+    for i in range(min(len(actual_frames), len(grey_frames))):
         joints_all_frames.append(get_single_frame(i))
         print(f"Frame {i} 3D joints processed")
     joints_all_frames = np.array(joints_all_frames)
+
+    # Save the 3D joint data as frames_all.npy
+    np.save("frames_all.npy", joints_all_frames)
+    print("Saved 3D joint data to frames_all.npy")
 
     # Calculate angles for all frames
     print("Calculating angles...")
@@ -359,10 +363,6 @@ if __name__ == "__main__":
         angles = calculate_angles(joints)
         angles_all_frames.append(angles)
         print(f"Frame {i} angles calculated")
-
-    # Save all the joint data
-    np.save("joints_all_frames.npy", joints_all_frames)
-    print("Saved 3D joint data to joints_all_frames.npy")
     
     # Save angles data (convert dict to structured format for saving)
     angle_names = list(angles_all_frames[0].keys())
