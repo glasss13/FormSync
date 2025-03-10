@@ -4,7 +4,7 @@ from gradio_client import Client, handle_file
 import numpy as np
 
 
-frame_num = 17
+frame_num = 20
 client = Client("depth-anything/Video-Depth-Anything")
 result = client.predict(
 		input_video={"video":handle_file('input_vid.mp4')},

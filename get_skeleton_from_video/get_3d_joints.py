@@ -96,5 +96,5 @@ ax.legend()
 plt.show()
 
 
-#print(joint_3d)
+np.save("joints_27", joint_3d)
 
