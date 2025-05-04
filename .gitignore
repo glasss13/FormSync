@@ -1,3 +1,4 @@
 work/yolo/yolov3.weights
 work/hrnet/pose_hrnet_w48_384x288.pth
+work/poseformerv2/27_243_45.2.bin
 __pycache__/
