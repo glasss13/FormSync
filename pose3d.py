@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.gridspec as gridspec
 
+MODEL_PATH = "./poseformerv2/27_243_45.2.bin"
+
 if torch.backends.mps.is_available():
     DEVICE = torch.device("mps")
 elif torch.cuda.is_available():
@@ -92,48 +94,40 @@ def get_pose3D(video_path: str, keypoints):
     args.embed_dim_ratio, args.depth, args.frames = 32, 4, 243
     args.number_of_kept_frames, args.number_of_kept_coeffs = 27, 27
     args.pad = (args.frames - 1) // 2
-    args.previous_dir = 'checkpoint/'
     args.n_joints, args.out_joints = 17, 17
 
     ## Reload 
     model = nn.DataParallel(PoseTransformerV2(args=args))
     model.to(DEVICE)
 
-    model_dict = model.state_dict()
-    # Put the pretrained model of PoseFormerV2 in 'checkpoint/']
-    # model_path = sorted(glob.glob(os.path.join(args.previous_dir, '27_243_45.2.bin')))[0]
-    model_path = "./poseformerv2/27_243_45.2.bin"
-
-    pre_dict = torch.load(model_path, weights_only=False, map_location=DEVICE)
+    pre_dict = torch.load(MODEL_PATH, weights_only=False, map_location=DEVICE)
     model.load_state_dict(pre_dict['model_pos'], strict=True)
 
     model.eval()
 
     video_length = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    ## 3D
-    print('\nGenerating 3D pose...')
-    for i in tqdm(range(video_length)):
+    out = []
+
+    for frame in range(video_length):
         ret, img = video_capture.read()
-        print("read frame")
         if not ret:
             continue
-        print("made it ehre")
 
         img_size = img.shape
 
         ## input frames
-        start = max(0, i - args.pad)
-        end =  min(i + args.pad, len(keypoints[0])-1)
+        start = max(0, frame - args.pad)
+        end =  min(frame + args.pad, len(keypoints[0])-1)
 
         input_2D_no = keypoints[0][start:end+1]
         
         left_pad, right_pad = 0, 0
         if input_2D_no.shape[0] != args.frames:
-            if i < args.pad:
-                left_pad = args.pad - i
-            if i > len(keypoints[0]) - args.pad - 1:
-                right_pad = i + args.pad - (len(keypoints[0]) - 1)
+            if frame < args.pad:
+                left_pad = args.pad - frame
+            if frame > len(keypoints[0]) - args.pad - 1:
+                right_pad = frame + args.pad - (len(keypoints[0]) - 1)
 
             input_2D_no = np.pad(input_2D_no, ((left_pad, right_pad), (0, 0), (0, 0)), 'edge')
         
@@ -173,46 +167,10 @@ def get_pose3D(video_path: str, keypoints):
         post_out = camera_to_world(post_out, R=rot, t=0)
         post_out[:, 2] -= np.min(post_out[:, 2])
 
-        print(post_out)
-        post_out[16] = [1,1,1]
-
-        input_2D_no = input_2D_no[args.pad]
-
-        ## 2D
-        image = show2Dpose(input_2D_no, copy.deepcopy(img))
-        print("hello from here")
-        cv2.imshow("hello", image)
-        cv2.waitKey(0)
-
-
-        # output_dir_2D = output_dir +'pose2D/'
-        # os.makedirs(output_dir_2D, exist_ok=True)
-        # cv2.imwrite(output_dir_2D + str(('%04d'% i)) + '_2D.png', image)
-
-        ## 3D
-        fig = plt.figure(figsize=(9.6, 5.4))
-        gs = gridspec.GridSpec(1, 1)
-        gs.update(wspace=-0.00, hspace=0.05) 
-        ax = plt.subplot(gs[0], projection='3d')
-        show3Dpose(post_out, ax)
-        
-        fig.canvas.draw()
-        width, height = fig.canvas.get_width_height(physical=True)
-
-        buffer = fig.canvas.buffer_rgba()
-
-        img_rgba = np.frombuffer(buffer, dtype=np.uint8).reshape(height, width, 4)
-
-        img_bgr = cv2.cvtColor(img_rgba.copy(), cv2.COLOR_RGBA2BGR)
-
-        # --- Display with OpenCV ---
-        cv2.imshow('Matplotlib 3D Pose via OpenCV', img_bgr)
-
-        
-
-        plt.clf()
-        plt.close(fig)
-        
+        out.append(post_out)
+    
+    return np.stack(out, axis=0)
+    
 
 # joints correspondence:
 # 0 - pelvis
