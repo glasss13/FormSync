@@ -12,8 +12,6 @@ from pose3d import get_pose3D, show3Dpose
 
 VIDEO_PATH: str = "./assets/klay.mp4"
 
-
-
 def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
@@ -43,12 +41,18 @@ def main():
         cv2.imshow('Matplotlib 3D Pose via OpenCV', img_bgr)
         cv2.waitKey(0)
 
-    
 
     plt.clf()
     plt.close(fig)
 
-    
 
 if __name__ == "__main__":
     main()
+
+
+# things the backend needs to do:
+# 1. compute joint coordinates for each frame
+# 2. compute loss score based on the coordinates and the selected reference video
+# 3. Send down the reference video with joints overlaid
+# 4. Generate a video of the user's inputted video with joints overlaid
+# 5. Generate a video of the user's inputted video with skeleton in 3d space.

@@ -1,0 +1,3 @@
+curl "https://drive.usercontent.google.com/download?id=1YgA9riqm0xG2j72qhONi5oyiAxc98Y1N&export=download&authuser=0&confirm=t&uuid=df28dc44-dcbb-463b-bc9a-99087b6905ae&at=APcmpoxNNQDMBtzoH4NL143Rm250:1746477304898" > ./yolo/yolov3.weights
+curl "https://drive.usercontent.google.com/download?id=1YLShFgDJt2Cs9goDw9BmR-UzFVgX3lc8&export=download&authuser=0&confirm=t&uuid=0a70e4ba-a3c1-4673-a6cc-9219f00e1744&at=APcmpozo2F3NOBkjOASPylJW7Agh:1746477545491" > ./hrnet/pose_hrnet_w48_384x288.pth
+curl "https://drive.usercontent.google.com/download?id=14SpqPyq9yiblCzTH5CorymKCUsXapmkg&export=download&authuser=0&confirm=t&uuid=9251ac86-13b0-443f-aa2e-41ef64b51b9a&at=APcmpowvDiLqedneRDFPtU7bC3t_:1746477686530" > ./poseformerv2/27_243_45.2.bin
