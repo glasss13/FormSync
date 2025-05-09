@@ -16,8 +16,10 @@ from pose3d import get_pose3D, show3Dpose, init_model as init_poseformer_model
 from utils2 import extract_angles_from_frame
 
 from flask import Flask, request, abort, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 POSEFORMER_ARGS = SimpleNamespace()
 POSEFORMER_ARGS.embed_dim_ratio, POSEFORMER_ARGS.depth, POSEFORMER_ARGS.frames = 32, 4, 243
@@ -37,8 +39,8 @@ HRNET_ARGS.video = 'camera'
 HRNET_ARGS.gpu = '0'
 
 REFERENCE_VIDEOS = [
-    "./reference_videos/klay.mp4",
-    "./reference_videos/squat.mp4"
+    "./reference_videos/squat.mp4",
+    "./reference_videos/klay.mp4"
 ]
 
 
@@ -113,8 +115,6 @@ def align_videos(reference_video, user_video):
     max_frames = max(len(reference_video), len(user_video))
     _, warping_path = fastdtw(reference_video, user_video, radius=max_frames, dist=frame_distance)
     return warping_path
-[
-
 
 @app.route("/<int:reference_id>", methods=["POST"])
 def send_video(reference_id: int):
@@ -172,11 +172,10 @@ def send_video(reference_id: int):
 
     mse_sum = 0
     for step, (ref_idx, user_idx) in enumerate(path):
-
-        fd = frame_distance(ref_pose, user_pose)
-
         ref_pose = reference_joint_coordinates[ref_idx]
         user_pose = joint_coordinates[user_idx]
+
+        fd = frame_distance(ref_pose, user_pose)
 
         print("distance: ", fd)
         mse_sum += fd
@@ -203,8 +202,7 @@ def send_video(reference_id: int):
     plt.close(fig)
 
     response = {
-        "joint_coordinates": joint_coordinates,
-        "avg_mse_sum": mse_sum / len(path)
+        "avg_mse_sum": float(mse_sum / len(path))
     }
 
     return jsonify(response), 200
