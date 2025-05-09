@@ -87,23 +87,19 @@ def showimage(ax, img):
     plt.axis('off')
     ax.imshow(img)
 
-def get_pose3D(video_path: str, keypoints):
-    video_capture = cv2.VideoCapture(video_path)
-    args = SimpleNamespace()
-
-    args.embed_dim_ratio, args.depth, args.frames = 32, 4, 243
-    args.number_of_kept_frames, args.number_of_kept_coeffs = 27, 27
-    args.pad = (args.frames - 1) // 2
-    args.n_joints, args.out_joints = 17, 17
-
-    ## Reload 
+def init_model(args):
     model = nn.DataParallel(PoseTransformerV2(args=args))
     model.to(DEVICE)
 
     pre_dict = torch.load(MODEL_PATH, weights_only=False, map_location=DEVICE)
-    model.load_state_dict(pre_dict['model_pos'], strict=True)
+    model.load_state_dict(pre_dict["model_pos"], strict=True)
 
     model.eval()
+
+    return model
+
+def get_pose3D(video_path: str, model, args, keypoints):
+    video_capture = cv2.VideoCapture(video_path)
 
     video_length = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
 

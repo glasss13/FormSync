@@ -17,16 +17,6 @@ from hrnet.config import _C as hrnet_config, update_config
 YOLO_CFG: str = "./yolo/yolov3.cfg"
 YOLO_WEIGHT_PATH: str = "./yolo/yolov3.weights"
 
-hrnet_args = SimpleNamespace()
-hrnet_args.cfg = "./hrnet/w48_384x288_adam_lr1e-3.yaml"
-hrnet_args.opts = []
-hrnet_args.modelDir = "./hrnet/pose_hrnet_w48_384x288.pth"
-hrnet_args.det_dim = 416      
-hrnet_args.thred_score = 0.30 
-hrnet_args.animation = False  
-hrnet_args.num_person = 1     
-hrnet_args.video = 'camera'   
-hrnet_args.gpu = '0'          
 
 if torch.backends.mps.is_available():
     DEVICE = torch.device("mps")
@@ -65,10 +55,10 @@ def load_hrnet_model(config):
     return model
 
 
-def get_pose2d(video_path: str):
+def get_pose2d(video_path: str, human_model, pose_model):
     capture = cv2.VideoCapture(video_path)
 
-    kpts, scores = gen_video_kpts(capture)
+    kpts, scores = gen_video_kpts(capture, human_model, pose_model)
     kpts, scores, valid_frames = h36m_coco_format(kpts, scores)
 
     kpts = revise_kpts(kpts, scores, valid_frames)
@@ -92,13 +82,13 @@ def debug_human_detection(frame, bboxs, scores):
 
 
 
-def gen_video_kpts(video_capture: cv2.VideoCapture, det_dim=416, num_person=1, gen_output=False):
+def gen_video_kpts(video_capture: cv2.VideoCapture, human_model, pose_model, det_dim=416, num_person=1, gen_output=False):
     
     # Loading detector and pose model, initialize sort for track
-    human_model = load_YOLO_model(inp_dim=det_dim)
+    # human_model = load_YOLO_model(inp_dim=det_dim)
 
-    update_config(hrnet_config, hrnet_args)
-    pose_model = load_hrnet_model(hrnet_config)
+    # update_config(hrnet_config, hrnet_args)
+    # pose_model = load_hrnet_model(hrnet_config)
 
     people_sort = Sort(min_hits=0)
 
