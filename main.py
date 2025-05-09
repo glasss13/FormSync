@@ -13,8 +13,9 @@ import numpy as np
 from hrnet.config import _C as HRNET_CONFIG, update_config
 from pose2d import get_pose2d, load_hrnet_model, load_YOLO_model
 from pose3d import get_pose3D, show3Dpose, init_model as init_poseformer_model
+from utils2 import extract_angles_from_frame
 
-from flask import Flask, request, abort
+from flask import Flask, request, abort, jsonify
 
 app = Flask(__name__)
 
@@ -74,7 +75,26 @@ REFERENCE_VIDEO_JOINTS = init_reference_videos()
 def normalize_frame(joint_coords, reference_joint_idx=0):
     return joint_coords - joint_coords[reference_joint_idx]
 
-def frame_distance(joint_coords_a, joint_coords_b):
+def frame_distance(joint_coords_a, joint_coords_b, weights_dict = None):
+
+    angles_a, weights = extract_angles_from_frame(joint_coords_a)
+    angles_b, _ = extract_angles_from_frame(joint_coords_b)
+
+    if weights_dict is not None:
+        weights = weights_dict
+
+    distance = 0
+
+    for key in angles_a:
+        angle_a = angles_a[key]
+        angle_b = angles_b[key]
+        difference = min(abs(angle_a-angle_b), 360-abs(angle_a-angle_b))
+        distance += weights[key] * difference ** 2
+
+    return distance ** 0.5
+
+
+    '''
     norm_joint_coords_a = normalize_frame(joint_coords_a)
     norm_joint_coords_b = normalize_frame(joint_coords_b)
 
@@ -87,16 +107,17 @@ def frame_distance(joint_coords_a, joint_coords_b):
         total_distance += np.linalg.norm(norm_joint_coords_a[i] - norm_joint_coords_b[i])
 
     return total_distance
+    '''
 
 def align_videos(reference_video, user_video):
     max_frames = max(len(reference_video), len(user_video))
     _, warping_path = fastdtw(reference_video, user_video, radius=max_frames, dist=frame_distance)
     return warping_path
-    
+[
 
 
 @app.route("/<int:reference_id>", methods=["POST"])
-def hello_world(reference_id: int):
+def send_video(reference_id: int):
     if reference_id >= len(REFERENCE_VIDEO_JOINTS):
         print(f"invalid reference video id: {reference_id}")
         abort(404)
@@ -149,11 +170,16 @@ def hello_world(reference_id: int):
 
     path = sorted(path, key=lambda x: frame_distance(reference_joint_coordinates[x[0]], joint_coordinates[x[1]]), reverse=True)
 
+    mse_sum = 0
     for step, (ref_idx, user_idx) in enumerate(path):
+
+        fd = frame_distance(ref_pose, user_pose)
+
         ref_pose = reference_joint_coordinates[ref_idx]
         user_pose = joint_coordinates[user_idx]
 
-        print("distance: ", frame_distance(ref_pose, user_pose))
+        print("distance: ", fd)
+        mse_sum += fd
 
         ax1.clear()
         ax2.clear()
@@ -176,7 +202,12 @@ def hello_world(reference_id: int):
     plt.clf()
     plt.close(fig)
 
-    return str(joint_coordinates), 200
+    response = {
+        "joint_coordinates": joint_coordinates,
+        "avg_mse_sum": mse_sum / len(path)
+    }
+
+    return jsonify(response), 200
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=False)

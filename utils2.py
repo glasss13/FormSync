@@ -31,32 +31,30 @@ def compute_angle(p1, p2, p3):
     angle_rad = np.arccos(np.clip(dot_product, -1.0, 1.0))  # Clip for stability
     return np.degrees(angle_rad)
 
-def extract_angles_from_frame(frame_idx, pose3d_data):
+def extract_angles_from_frame(joint_3d):
     """
     Compute joint angles at frame frame_idx from pose3d_data.
 
     Parameters:
-    -frame_idx(int): Index of the frame to compute angles for.
-    -pose3d_data (np.ndarray): shape (num_frames, 17, 3)
+    -joint_3d (np.ndarray): shape (17, 3)
 
     Returns: 
     - angles_dict (dict): keys are (joint_a, vertex_joint, joint_b), values are angles in degrees. 
     """
-    joint_pairs = [[0, 1], [1, 3], [0, 2], [2, 4],
-                   [5, 6], [5, 7], [7, 9], [6, 8], [8, 10],
-                   [5, 11], [6, 12], [11, 12],
-                   [11, 13], [12, 14], [13, 15], [14, 16]]
+    connections = [[0, 1], [1, 2], [2, 3], [0, 4], [4, 5],
+                   [5, 6], [0, 7], [7, 8], [8, 9], [9, 10],
+                   [8, 11], [11, 12], [12, 13], [8, 14], [14, 15], [15, 16]]
     
     from collections import defaultdict 
-    joint_3d = pose3d_data[frame_idx] # shape (17,3)
     
     #build adjacent list
     neighbors = defaultdict(list)
-    for a, b in joint_pairs:
+    for a, b in connections:
         neighbors[a].append(b)
         neighbors[b].append(a)
     
     angles_dict = {}
+    weights = {}
     for center_joint, connected in neighbors.items():
         if len(connected) < 2:
             continue
@@ -67,8 +65,9 @@ def extract_angles_from_frame(frame_idx, pose3d_data):
                 angle = compute_angle(p1, p2, p3)
                 key = tuple(sorted([u, center_joint, v]))  # e.g., (4, 6, 12)
                 angles_dict[key] = angle
+                weights[key] = 1
 
-    return angles_dict    
+    return angles_dict, weights
 
 
 def get_min_angle_diff(selected_angles, target_angles, search_width):
