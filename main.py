@@ -43,9 +43,8 @@ HRNET_ARGS.video = 'camera'
 HRNET_ARGS.gpu = '0'
 
 REFERENCE_VIDEOS = [
-    "./reference_videos/bbal.mp4",
     "./reference_videos/squat.mp4",
-    "./reference_videos/klay.mp4"
+    "./reference_videos/bbal.mp4",
 ]
 
 

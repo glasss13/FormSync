@@ -1,10 +1,16 @@
 import squatImage from "./images/squat.png";
+import bbalImage from "./images/bbal.jpg";
 
 export const references = [
   {
     imageSrc: squatImage, // Replace with your actual image paths
     altText: "Man squatting",
     description: "Squat",
+  },
+  {
+    imageSrc: bbalImage,
+    altText: "Man Shooting a basketball",
+    description: "Basketball",
   },
   //   {
   //     imageSrc: "/images/image2.png", // Replace with your actual image paths

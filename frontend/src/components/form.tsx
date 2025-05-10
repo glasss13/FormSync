@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 const IDX_TO_NAME = [
   "Hip breadth",
@@ -83,19 +83,14 @@ export function VideoUploadForm(props: { apiUrl: string; reference: any }) {
       const response = await fetch(props.apiUrl, {
         method: "POST",
         body: formData,
-        // Headers are generally not needed for FormData with fetch,
-        // as the browser sets 'Content-Type': 'multipart/form-data' automatically.
       });
 
-      const data: any = await response.json(); // Assuming the server responds with JSON
+      const data: any = await response.json();
 
       if (response.ok) {
         setMessage(`Upload successful!`);
         setMessageType("success");
-        setResponseData(data); // Store the response data for rendering
-        // Optionally reset the file input, though it's often better to let the user see what they uploaded
-        // setSelectedFile(null);
-        // (event.target as HTMLFormElement).reset(); // This can also work
+        setResponseData(data);
 
         const video_res = await fetch(
           `http://localhost:5000/videos/${data.video_name}`,
@@ -118,6 +113,8 @@ export function VideoUploadForm(props: { apiUrl: string; reference: any }) {
       setUploading(false);
     }
   };
+
+  console.log(props.reference);
 
   return (
     <div>
@@ -183,7 +180,7 @@ export function VideoUploadForm(props: { apiUrl: string; reference: any }) {
                       ? "text-yellow-500"
                       : "text-green-500"
                   }>
-                  {IDX_TO_NAME[idx]}
+                  {IDX_TO_NAME[idx]} {Math.round(loss)}
                 </p>
               ))}
             </div>
