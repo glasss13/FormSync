@@ -54,7 +54,6 @@ def extract_angles_from_frame(joint_3d):
         neighbors[b].append(a)
     
     angles_dict = {}
-    weights = {}
     for center_joint, connected in neighbors.items():
         if len(connected) < 2:
             continue
@@ -63,11 +62,11 @@ def extract_angles_from_frame(joint_3d):
                 u, v = connected[i], connected[j]
                 p1, p2, p3 = joint_3d[u], joint_3d[center_joint], joint_3d[v]
                 angle = compute_angle(p1, p2, p3)
-                key = tuple(sorted([u, center_joint, v]))  # e.g., (4, 6, 12)
+                u, v = min(u, v), max(u, v)
+                key = tuple([u, center_joint, v])  # e.g., (4, 6, 12)
                 angles_dict[key] = angle
-                weights[key] = 1
 
-    return angles_dict, weights
+    return angles_dict
 
 
 def get_min_angle_diff(selected_angles, target_angles, search_width):

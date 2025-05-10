@@ -1,6 +1,10 @@
+from collections import defaultdict
+import io
+import json
 import os
 import tempfile
 from types import SimpleNamespace
+from uuid import uuid4
 import cv2
 from fastdtw import fastdtw
 
@@ -15,7 +19,7 @@ from pose2d import get_pose2d, load_hrnet_model, load_YOLO_model
 from pose3d import get_pose3D, show3Dpose, init_model as init_poseformer_model
 from utils2 import extract_angles_from_frame
 
-from flask import Flask, request, abort, jsonify
+from flask import Flask, request, abort, jsonify, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -39,6 +43,7 @@ HRNET_ARGS.video = 'camera'
 HRNET_ARGS.gpu = '0'
 
 REFERENCE_VIDEOS = [
+    "./reference_videos/bbal.mp4",
     "./reference_videos/squat.mp4",
     "./reference_videos/klay.mp4"
 ]
@@ -72,48 +77,125 @@ def init_reference_videos():
 
 REFERENCE_VIDEO_JOINTS = init_reference_videos()
 
+ID_TO_ANGLE = {
+    0: (1, 0, 4), # hip breadth
+    1: (1, 0, 7), # right hip flexion
+    2: (4, 0, 7), # Left hip flexion
+    3: (0, 1, 2), # Right hip joint
+    4: (1, 2, 3), # Right knee flexion
+    5: (0, 4, 5), # Left hip joint
+    6: (4, 5, 6), # Left knee flexion
+    7: (0, 7, 8), # Spinal extension
+    8: (7, 8, 9), # Lower cervical
+    9: (7, 8, 11), # Left neck-to-shoulder
+    10: (7, 8, 14), # Right neck-to-shoulder
+    11: (9, 8, 11), # Upper left shoulder
+    12: (9, 8, 14), # Upper right shoulder
+    13: (11, 8, 14), # Shoulder spread
+    14: (8, 9, 10), # Head tilt angle
+    15: (8, 11, 12), # Left shoulder abduction
+    16: (11, 12, 13), # Left elbow flexion
+    17: (8, 14, 15), # Right shoulder abduction
+    18: (14, 15, 16), # Right elbow flexion
+}
 
+ANGLE_TO_ID = {angle: id for (id, angle) in ID_TO_ANGLE.items()}
+
+def create_pose_comparison_video(reference_joint_coordinates, joint_coordinates, path, video_filename="pose_comparison.mp4", fps=10):
+    fig = plt.figure(figsize=(19.2, 5.4))
+    gs = gridspec.GridSpec(1, 2)
+    gs.update(wspace=0.05, hspace=0.05)
+
+    ax1 = fig.add_subplot(gs[0], projection='3d', label="Reference video")
+    ax2 = fig.add_subplot(gs[1], projection='3d', label="Your video")
+
+    # Get the figure's dimensions in pixels to initialize VideoWriter
+    # We draw the canvas once to ensure its size is set.
+    fig.canvas.draw()
+    img_buf = io.BytesIO()
+    fig.savefig(img_buf, format='png', dpi=100) # dpi can be adjusted
+    img_buf.seek(0)
+    img = plt.imread(img_buf)
+    height, width, _ = img.shape
+    img_buf.close()
+
+    # Define the codec and create VideoWriter object
+    # Common codecs: 'mp4v' for .mp4, 'XVID' for .avi
+    # You might need to install codecs on your system (e.g., ffmpeg)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(video_filename, fourcc, fps, (width, height))
+
+    for step, (ref_idx, user_idx) in enumerate(path):
+        ref_pose = reference_joint_coordinates[ref_idx]
+        user_pose = joint_coordinates[user_idx]
+
+        ax1.clear()
+        ax2.clear()
+
+        show3Dpose(ref_pose, ax1)
+        show3Dpose(user_pose, ax2)
+
+        ax1.text2D(0.5, 0.95, "Reference video", transform=ax1.transAxes, ha='center', va='top', fontsize=12, color='black')
+        ax2.text2D(0.5, 0.95, "Your video", transform=ax2.transAxes, ha='center', va='top', fontsize=12, color='black')
+
+        # Save the current figure to an in-memory buffer
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=100) # Ensure dpi matches initialization
+        buf.seek(0)
+
+        # Read the image from the buffer using OpenCV
+        img_array = np.frombuffer(buf.getvalue(), dtype=np.uint8)
+        frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        buf.close()
+
+        # OpenCV uses BGR by default, Matplotlib uses RGB. Convert if necessary.
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+        out.write(frame_bgr)
+        print(f"Processed frame {step+1}/{len(path)}")
+
+
+    # Release everything when job is finished
+    out.release()
+    plt.clf() # Clear the current figure
+    plt.close(fig) # Close the figure window
+
+    print(f"Video '{video_filename}' created successfully.")
+
+    return video_filename
 
 def normalize_frame(joint_coords, reference_joint_idx=0):
     return joint_coords - joint_coords[reference_joint_idx]
 
 def frame_distance(joint_coords_a, joint_coords_b, weights_dict = None):
+    angles_a = extract_angles_from_frame(joint_coords_a)
+    angles_b = extract_angles_from_frame(joint_coords_b)
 
-    angles_a, weights = extract_angles_from_frame(joint_coords_a)
-    angles_b, _ = extract_angles_from_frame(joint_coords_b)
+    if weights_dict is None:
+        weights_dict = {}
 
-    if weights_dict is not None:
-        weights = weights_dict
+    for key in ANGLE_TO_ID.keys():
+        if key not in weights_dict:
+            weights_dict[key] = 1
 
     distance = 0
+    distance_dict = {}
 
     for key in angles_a:
         angle_a = angles_a[key]
         angle_b = angles_b[key]
-        difference = min(abs(angle_a-angle_b), 360-abs(angle_a-angle_b))
-        distance += weights[key] * difference ** 2
+        diff = abs(angle_a - angle_b)
+        diff = diff % 360
+        if diff > 180:
+            diff = 360 - diff
+        distance += weights_dict[key] * diff
+        distance_dict[key] = diff
+    
+    return distance, distance_dict
 
-    return distance ** 0.5
-
-
-    '''
-    norm_joint_coords_a = normalize_frame(joint_coords_a)
-    norm_joint_coords_b = normalize_frame(joint_coords_b)
-
-    total_distance = 0.0
-    num_joints = norm_joint_coords_a.shape[0]
-
-    for i in range(num_joints):
-        # use the euclidean distance between the joints for now
-        # we should probably find something better?
-        total_distance += np.linalg.norm(norm_joint_coords_a[i] - norm_joint_coords_b[i])
-
-    return total_distance
-    '''
-
-def align_videos(reference_video, user_video):
+def align_videos(reference_video, user_video, weights_dict = None):
     max_frames = max(len(reference_video), len(user_video))
-    _, warping_path = fastdtw(reference_video, user_video, radius=max_frames, dist=frame_distance)
+    _, warping_path = fastdtw(reference_video, user_video, radius=max_frames, dist=lambda x,y: frame_distance(x,y, weights_dict)[0])
     return warping_path
 
 @app.route("/<int:reference_id>", methods=["POST"])
@@ -154,58 +236,72 @@ def send_video(reference_id: int):
             except:
                 print("error deleting temporary file {video_file_path}")
 
+    if "weights" not in request.form:
+        print("no weights provided")
+        abort(400)
+
+    try:
+        weights_data = json.loads(request.form["weights"])
+    except:
+        print("Invalid weights JSON")
+        abort(400)
+
+    weights_dict = {ID_TO_ANGLE[int(id)]: weight for id, weight in weights_data.items()}
+    for key in ANGLE_TO_ID.keys():
+        if key not in weights_dict:
+            weights_dict[key] = 0
     
     reference_joint_coordinates = REFERENCE_VIDEO_JOINTS[reference_id]
 
     print("aligning videos...")
     path = align_videos(reference_joint_coordinates, joint_coordinates)
 
-    fig = plt.figure(figsize=(19.2, 5.4))
 
-    gs = gridspec.GridSpec(1, 2)
-    gs.update(wspace=0.05, hspace=0.05)
+    video_name = str(uuid4()) + ".mp4"
+    create_pose_comparison_video(reference_joint_coordinates, joint_coordinates, path, f"./generated_videos/{video_name}")
 
-    ax1 = fig.add_subplot(gs[0], projection='3d')
-    ax2 = fig.add_subplot(gs[1], projection='3d')
-
-    path = sorted(path, key=lambda x: frame_distance(reference_joint_coordinates[x[0]], joint_coordinates[x[1]]), reverse=True)
-
-    mse_sum = 0
+    total_loss = 0
+    joint_loss = defaultdict(lambda: 0)
     for step, (ref_idx, user_idx) in enumerate(path):
         ref_pose = reference_joint_coordinates[ref_idx]
         user_pose = joint_coordinates[user_idx]
 
-        fd = frame_distance(ref_pose, user_pose)
+        loss, dist_dict = frame_distance(ref_pose, user_pose, weights_dict)
+        for k, v in dist_dict.items():
+            joint_loss[k] += v
 
-        print("distance: ", fd)
-        mse_sum += fd
+        print("distance: ", loss)
+        total_loss += loss
 
-        ax1.clear()
-        ax2.clear()
 
-        show3Dpose(ref_pose, ax1)
-        show3Dpose(user_pose, ax2)
+    print("joint_loss:", joint_loss)
 
-        fig.canvas.draw()
-        width, height = fig.canvas.get_width_height(physical=True)
+    for k, v in joint_loss.items():
+        joint_loss[k] /= len(path)
+        joint_loss[k] *= weights_dict[k]
 
-        buffer = fig.canvas.buffer_rgba()
+    weights_sum = 0
+    for v in weights_dict.values():
+        weights_sum += v
 
-        img_rgba = np.frombuffer(buffer, dtype=np.uint8).reshape(height, width, 4)
+    total_loss *= len(ID_TO_ANGLE) / weights_sum
 
-        img_bgr = cv2.cvtColor(img_rgba.copy(), cv2.COLOR_RGBA2BGR)
+    max_avg_loss = 180 * 19
+    avg_loss = total_loss / len(path)
 
-        cv2.imshow('Matplotlib 3D Pose via OpenCV', img_bgr)
-        cv2.waitKey(0)
-    
-    plt.clf()
-    plt.close(fig)
 
     response = {
-        "avg_mse_sum": float(mse_sum / len(path))
+        "avg_loss": float(avg_loss),
+        "joint_loss":  {ANGLE_TO_ID[k]: float(v) for k,v in joint_loss.items()},
+        "video_name": video_name
     }
 
     return jsonify(response), 200
+
+
+@app.route("/videos/<path:filename>")
+def serve_video(filename):
+    return send_from_directory("generated_videos", filename)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=False)

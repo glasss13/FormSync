@@ -186,3 +186,7 @@ def get_pose3D(video_path: str, model, args, keypoints):
 # 14 - right shoulder
 # 15 - right elbow
 # 16 - right hand
+
+
+# angles:
+# (0, 1, 4) - pelvic
